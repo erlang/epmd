@@ -1,0 +1,5 @@
+_build/
+doc/
+*.swp
+rebar.lock
+rebar3

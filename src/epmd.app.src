@@ -1,0 +1,15 @@
+{application, epmd,
+ [{description, "Erlang Port Mapper Daemon"},
+  {vsn, "1.0.0"},
+  {modules, [epmd,
+             epmd_app,
+             epmd_sup]},
+  {registered, [epmd_sup,
+                epmd,
+                epmd_listen_sup]},
+  {applications, [kernel,
+                  stdlib]},
+  {mod, {epmd_app, []}}
+ ]}.
+
+%% vim: ft=erlang
