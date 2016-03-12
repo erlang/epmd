@@ -10,9 +10,9 @@ ifeq ($(REBAR3),)
 REBAR3 = $(CURDIR)/rebar3
 endif
 
-.PHONY: deps test build
+.PHONY: deps escpritize test build
 
-all: build test docs
+all: build escriptize docs
 
 build: $(REBAR3)
 	@$(REBAR3) compile
@@ -20,6 +20,9 @@ build: $(REBAR3)
 $(REBAR3):
 	wget $(REBAR3_URL) || curl -Lo rebar3 $(REBAR3_URL)
 	chmod a+x rebar3
+
+escriptize:
+	@$(REBAR3) escriptize
 
 deps:
 	@$(REBAR3) get-deps
