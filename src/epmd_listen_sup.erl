@@ -46,12 +46,12 @@ init([]) ->
 get_port_no() ->
     case os:getenv("ERL_EPMD_PORT") of
 	false ->
-	    ?erlang_daemon_port;
+	    application:get_env(epmd, port, ?erlang_daemon_port);
 	Port ->
 	    case (catch list_to_integer(Port)) of
 		N when is_integer(N) ->
 		    N;
 		_ ->
-		    ?erlang_daemon_port
+		    application:get_env(epmd, port, ?erlang_daemon_port)
 	    end
     end.
