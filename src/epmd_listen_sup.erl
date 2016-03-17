@@ -37,6 +37,7 @@ start_listener() ->
 init([]) ->
     {ok, Listen} = gen_tcp:listen(get_port_no(), [{active, once},
 						  binary,
+                                                  {reuseaddr, true},
 						  {packet, 2}]),
     {ok, {{simple_one_for_one, 60, 3600},
 	  [{epmd_srv,
