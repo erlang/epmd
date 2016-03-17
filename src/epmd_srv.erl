@@ -70,9 +70,16 @@ handle_info({tcp, Socket, <<?EPMD_PORT_PLEASE2_REQ, Name/binary>>},
     end,
     gen_tcp:close(Socket),
     {stop, normal, State};
+handle_info({tcp, Socket, <<?EPMD_KILL_REQ>>}, #state{socket=Socket}=S) ->
+    %% Check if local peer
+    %% Check if KILL_REQ is allowed
+    do_reply(Socket, <<"OK">>),
+    erlang:halt(),
+    {noreply, S};
 handle_info({tcp_closed, Socket}, #state{socket=Socket}=State) ->
     {stop, normal, State};
-handle_info(_Info, State) ->
+handle_info(Info, State) ->
+    error_logger:error_msg("Unhandled info ~p~n", [Info]),
     {noreply, State}.
 
 do_reply(Socket, Data) ->
@@ -86,5 +93,3 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
-
