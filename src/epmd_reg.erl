@@ -22,7 +22,7 @@
 -module(epmd_reg).
 -behaviour(gen_server).
 
--export([start_link/0, node_reg/7, lookup/1]).
+-export([start_link/0, node_reg/7, node_unreg/1, lookup/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, 
 	 code_change/3, terminate/2]).
 
@@ -39,6 +39,9 @@ start_link() ->
 node_reg(Name, Port, Nodetype, Protocol, Highvsn, Lowvsn, Extra) ->
     gen_server:call(?MODULE, {node_reg, Name, Port, Nodetype, 
 			      Protocol, Highvsn, Lowvsn, Extra, self()}).
+
+node_unreg(Name) ->
+    gen_server:call(?MODULE, {node_unreg, Name}).
 
 lookup(Name) ->
     gen_server:call(?MODULE, {lookup, Name}).
@@ -80,6 +83,14 @@ handle_call({lookup, Name}, _From, #state{reg=Reg}=State) ->
 		     Highvsn, Lowvsn, Extra}, State};
 	false ->
 	    {reply, {error, notfound}, State}
+    end;
+handle_call({node_unreg, Name}, _From, #state{reg=Reg,unreg=Unreg,unreg_count=Uc}=S) ->
+    case lists:keytake(Name, #node.symname, Reg) of
+        {value, Node, New_reg} ->
+            S1 = S#state{reg=New_reg, unreg=[Node|Unreg], unreg_count=Uc+1},
+            {reply, ok, S1};
+        _ ->
+            {reply, error, S}
     end.
 
 handle_cast(_, State) ->

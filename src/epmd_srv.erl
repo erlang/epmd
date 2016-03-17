@@ -70,6 +70,16 @@ handle_info({tcp, Socket, <<?EPMD_PORT_PLEASE2_REQ, Name/binary>>},
     end,
     gen_tcp:close(Socket),
     {stop, normal, State};
+handle_info({tcp, Socket, <<?EPMD_STOP_REQ, Name/binary>>}, #state{socket=Socket}=S) ->
+    %% Check if local peer
+    %% Check if STOP_REQ is allowed
+    case epmd_reg:node_unreg(Name) of
+        ok ->
+            do_reply(Socket, <<"STOPPED">>);
+        error ->
+            do_reply(Socket, <<"NOEXIST">>)
+    end,
+    {noreply, S};
 handle_info({tcp, Socket, <<?EPMD_KILL_REQ>>}, #state{socket=Socket}=S) ->
     %% Check if local peer
     %% Check if KILL_REQ is allowed

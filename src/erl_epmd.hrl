@@ -26,4 +26,4 @@
 %% Commands used only by interactive client
 -define(EPMD_DUMP, $d).
 -define(EPMD_KILL_REQ, $k).
--define(EPMD_STOP, $s).
+-define(EPMD_STOP_REQ, $s).
