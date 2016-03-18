@@ -52,13 +52,19 @@ handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, Port:16, Type, Protocol, High:16, Low:1
                        Len:16, Name:Len/binary, Elen:16, Extra:Elen/binary>>},
             #env{socket=S}=Env) ->
     error_logger:info_msg("EPMD Alive Request: ~p registered at ~w", [Name, Port]),
-    case epmd_reg:node_reg(Name, Port, Type, Protocol, High, Low, Extra) of
-	{ok, Creation} ->
-	    reply(S, <<?EPMD_ALIVE2_RESP, 0, Creation:16>>);
-	{error, _} ->
-	    reply(S, <<?EPMD_ALIVE2_RESP, 1, 99:16>>)
-    end,
-    {noreply, Env};
+    case name_is_valid(Name) of
+        true ->
+            case epmd_reg:node_reg(Name, Port, Type, Protocol, High, Low, Extra) of
+                {ok, Creation} ->
+                    reply(S, <<?EPMD_ALIVE2_RESP, 0, Creation:16>>);
+                {error, _} ->
+                    reply(S, <<?EPMD_ALIVE2_RESP, 1, 99:16>>)
+            end,
+            {noreply, Env};
+        false ->
+            gen_tcp:close(S),
+            {stop, normal, Env}
+    end;
 handle_info({tcp, S, <<?EPMD_PORT_PLEASE2_REQ, Name/binary>>}, #env{socket=S}=Env) ->
     case epmd_reg:lookup(Name) of
 	{ok, Name, Port, Nodetype, Protocol, Highvsn, Lowvsn, Extra} ->
@@ -107,6 +113,12 @@ handle_info({tcp_closed, S}, #env{socket=S}=Env) ->
 handle_info(Info, Env) ->
     error_logger:error_msg("Unhandled info ~p~n", [Info]),
     {noreply, Env}.
+
+name_is_valid(Name) ->
+    case [ C || <<C>> <= Name, C =:= 0 ] of
+        [] -> true;
+        _  -> false
+    end.
 
 reply(S, Data) ->
     %% we need {packet, 2} on receive but raw on send
