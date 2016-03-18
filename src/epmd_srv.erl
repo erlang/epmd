@@ -52,10 +52,11 @@ handle_cast(accept, #env{socket=Listen}=Env) ->
 
 handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, Port:16, Type, Protocol, High:16, Low:16,
                        Len:16, Name:Len/binary, Elen:16, Extra:Elen/binary>>},
-            #env{socket=S}=Env) when Elen =< ?maxsymlen ->
-    error_logger:info_msg("EPMD Alive Request: ~p registered at ~w", [Name, Port]),
+            #env{socket=S}=Env) ->
+    error_logger:info_msg("EPMD Alive Request: ~p registered at ~w~n", [safe_string(Name), Port]),
+    error_logger:info_msg("EPMD Alive Request: name size ~w~n", [byte_size(Name)]),
     case name_is_valid(Name) of
-        true ->
+        ok ->
             case epmd_reg:node_reg(Name, Port, Type, Protocol, High, Low, Extra) of
                 {ok, Creation} ->
                     reply(S, <<?EPMD_ALIVE2_RESP, 0, Creation:16>>);
@@ -63,24 +64,38 @@ handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, Port:16, Type, Protocol, High:16, Low:1
                     reply(S, <<?EPMD_ALIVE2_RESP, 1, 99:16>>)
             end,
             {noreply, Env};
-        false ->
-            error_logger:info_msg("EPMD Alive Request: Name invalid~n"),
+        invalid_size ->
+            %% really? .. this the way?
+            error_logger:info_msg("EPMD Alive Request: Invalid size (too large)~n"),
+            reply(S, <<?EPMD_ALIVE2_RESP, 1, 99:16>>),
+            {noreply, Env};
+        invalid_string ->
+            error_logger:info_msg("EPMD Alive Request: Invalid name (nulls)~n"),
             gen_tcp:close(S),
             {stop, normal, Env}
     end;
+handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, _/binary>>}, #env{socket=S}=Env) ->
+    %% why do we handle too large and too small differently?
+    error_logger:info_msg("EPMD Alive Request: Invalid size (too small)~n"),
+    gen_tcp:close(S),
+    {stop, normal, Env};
 handle_info({tcp, S, <<?EPMD_PORT_PLEASE2_REQ, Name/binary>>}, #env{socket=S}=Env) when byte_size(Name) =< ?maxsymlen ->
     case epmd_reg:lookup(Name) of
 	{ok, Name, Port, Nodetype, Protocol, Highvsn, Lowvsn, Extra} ->
-            error_logger:info_msg("EPMD Port Request: ~p -> ~w", [Name, Port]),
+            error_logger:info_msg("EPMD Port Request: ~p -> ~w", [safe_string(Name), Port]),
 	    Len = byte_size(Name),
 	    Elen = byte_size(Extra),
             reply(S, <<?EPMD_PORT2_RESP, 0, Port:16, Nodetype,
                        Protocol, Highvsn:16, Lowvsn:16,
                        Len:16, Name/binary, Elen:16, Extra/binary>>);
 	{error, _} ->
-            error_logger:info_msg("EPMD Port Request: ~p -> Not registered", [Name]),
+            error_logger:info_msg("EPMD Port Request: ~p -> Not registered", [safe_string(Name)]),
 	    reply(S, <<?EPMD_PORT2_RESP, 1>>)
     end,
+    gen_tcp:close(S),
+    {stop, normal, Env};
+handle_info({tcp, S, <<?EPMD_PORT_PLEASE2_REQ, _/binary>>}, #env{socket=S}=Env) ->
+    error_logger:info_msg("EPMD Port Request: Invalid size~n"),
     gen_tcp:close(S),
     {stop, normal, Env};
 handle_info({tcp, S, <<?EPMD_NAMES_REQ>>}, #env{port=ServerPort, socket=S}=Env) ->
@@ -92,14 +107,12 @@ handle_info({tcp, S, <<?EPMD_NAMES_REQ>>}, #env{port=ServerPort, socket=S}=Env) 
     gen_tcp:close(S),
     {stop, normal,Env};
 handle_info({tcp, S, <<?EPMD_STOP_REQ, Name/binary>>}, #env{socket=S}=Env) ->
-    error_logger:info_msg("EPMD Stop Request: ~p", [Name]),
+    error_logger:info_msg("EPMD Stop Request: ~p", [safe_string(Name)]),
     %% Check if local peer
     %% Check if STOP_REQ is allowed
     case epmd_reg:node_unreg(Name) of
-        ok ->
-            reply(S, <<"STOPPED">>);
-        error ->
-            reply(S, <<"NOEXIST">>)
+        ok    -> reply(S, <<"STOPPED">>);
+        error -> reply(S, <<"NOEXIST">>)
     end,
     gen_tcp:close(S),
     {stop, normal,Env};
@@ -117,16 +130,15 @@ handle_info({tcp, S, <<>>}, #env{socket=S}=Env) ->
     {stop, normal, Env};
 handle_info({tcp_closed, S}, #env{socket=S}=Env) ->
     {stop, normal, Env};
-handle_info(Info, #env{socket=S}=Env) ->
+handle_info(Info, Env) ->
     error_logger:error_msg("Unhandled info ~p~n", [Info]),
-    gen_tcp:close(S),
-    {stop, normal, Env}.
+    {noreply, Env}.
 
-name_is_valid(Name) ->
-    case [ C || <<C>> <= Name, C =:= 0 ] of
-        [] -> true;
-        _  -> false
-    end.
+terminate(_Reason, _Env) ->
+    ok.
+
+code_change(_OldVsn, Env, _Extra) ->
+    {ok, Env}.
 
 reply(S, Data) ->
     %% we need {packet, 2} on receive but raw on send
@@ -134,8 +146,22 @@ reply(S, Data) ->
     gen_tcp:send(S, Data),
     inet:setopts(S, [{packet, 2}, {active, once}]).
 
-terminate(_Reason, _Env) ->
-    ok.
 
-code_change(_OldVsn, Env, _Extra) ->
-    {ok, Env}.
+safe_string(<<Name:255/binary, _/binary>>) -> Name;
+safe_string(Name) -> Name.
+
+%% check for valid name
+%% - valid utf8
+%% - no nulls
+%% - total length no more than maxsymlen
+%% - total characters no more than 255
+name_is_valid(Name) when byte_size(Name) > ?maxsymlen ->
+    invalid_size;
+name_is_valid(Name) when is_binary(Name) ->
+    Ls = unicode:characters_to_list(Name),
+    name_is_valid(Ls, 0).
+
+name_is_valid(_, N) when N > 255 -> invalid_size;
+name_is_valid([], _) -> ok;
+name_is_valid([0|_], _) -> invalid_string;
+name_is_valid([_|Ls], N) -> name_is_valid(Ls, N + 1).

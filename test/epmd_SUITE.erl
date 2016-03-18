@@ -613,7 +613,7 @@ alive_req_too_small_2(Config) when is_list(Config) ->
 alive_req_too_large(Config) when is_list(Config) ->
     ok = epmdrun(),
     {ok,Sock} = connect(),
-    L = [
+    L = ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -624,15 +624,15 @@ alive_req_too_large(Config) when is_list(Config) ->
          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        ],
+         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
     S = length(lists:flatten(L)),
     M = [?EPMD_ALIVE2_REQ, put16(?DUMMY_PORT),$M,0, put16(5),
          put16(5), put16(S),L,put16(0)],
     ok = send(Sock, [size16(M), M]),
     sleep(?MEDIUM_PAUSE),
-    {ok,[?EPMD_ALIVE2_RESP,1]} = recv(Sock,2),
+    Wat = recv(Sock,2),
+    io:format("too_large ~p~n", [Wat]),
+    {ok,[?EPMD_ALIVE2_RESP,1]} = Wat,
     ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
