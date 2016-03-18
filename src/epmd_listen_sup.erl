@@ -35,13 +35,14 @@ start_listener() ->
     supervisor:start_child(?MODULE, []).
 
 init([]) ->
-    {ok, Listen} = gen_tcp:listen(get_port_no(), [{active, once},
-						  binary,
-                                                  {reuseaddr, true},
-						  {packet, 2}]),
+    PortNo = get_port_no(),
+    {ok, Listen} = gen_tcp:listen(PortNo, [{active, once},
+                                           binary,
+                                           {reuseaddr, true},
+                                           {packet, 2}]),
     {ok, {{simple_one_for_one, 60, 3600},
 	  [{epmd_srv,
-	    {epmd_srv, start_link, [Listen]},
+	    {epmd_srv, start_link, [[Listen,PortNo]]},
 	    temporary, 3000, worker, [epmd_srv]}]}}.
     
 get_port_no() ->

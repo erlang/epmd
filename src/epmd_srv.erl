@@ -22,7 +22,8 @@
 -module(epmd_srv).
 -behaviour(gen_server).
 
--record(env, {socket}).
+-record(env, {port,
+              socket}).
 
 -export([start_link/1]).
 -export([init/1, terminate/2,
@@ -31,13 +32,13 @@
 
 -include("erl_epmd.hrl").
 
-start_link(Socket) ->
-    gen_server:start_link(?MODULE, [Socket], []).
+start_link([Socket,PortNo]) ->
+    gen_server:start_link(?MODULE, [Socket,PortNo], []).
 
-init([S]) ->
+init([S,Port]) ->
     error_logger:info_msg("EPMD Service started~n"),
     gen_server:cast(self(), accept),
-    {ok, #env{socket=S}}.
+    {ok, #env{socket=S,port=Port}}.
 
 handle_call(_Req, _From, Env) ->
     {noreply, Env}.
@@ -73,6 +74,14 @@ handle_info({tcp, S, <<?EPMD_PORT_PLEASE2_REQ, Name/binary>>}, #env{socket=S}=En
     end,
     gen_tcp:close(S),
     {stop, normal, Env};
+handle_info({tcp, S, <<?EPMD_NAMES_REQ>>}, #env{port=ServerPort, socket=S}=Env) ->
+    error_logger:info_msg("EPMD Names Request"),
+    Format = "name ~s at port ~w~n",
+    Nodes = iolist_to_binary([io_lib:format(Format, [Name, Port]) ||
+                              {Name, Port} <- epmd_reg:nodes()]),
+    reply(S, <<ServerPort:32, Nodes/binary>>),
+    gen_tcp:close(S),
+    {stop, normal,Env};
 handle_info({tcp, S, <<?EPMD_STOP_REQ, Name/binary>>}, #env{socket=S}=Env) ->
     error_logger:info_msg("EPMD Stop Request: ~p", [Name]),
     %% Check if local peer
@@ -83,14 +92,16 @@ handle_info({tcp, S, <<?EPMD_STOP_REQ, Name/binary>>}, #env{socket=S}=Env) ->
         error ->
             reply(S, <<"NOEXIST">>)
     end,
-    {noreply, Env};
+    gen_tcp:close(S),
+    {stop, normal,Env};
 handle_info({tcp, S, <<?EPMD_KILL_REQ>>}, #env{socket=S}=Env) ->
     error_logger:info_msg("EPMD Kill Request"),
     %% Check if local peer
     %% Check if KILL_REQ is allowed
     reply(S, <<"OK">>),
+    gen_tcp:close(S),
     erlang:halt(),
-    {noreply, Env};
+    {stop, normal,Env};
 handle_info({tcp_closed, S}, #env{socket=S}=Env) ->
     {stop, normal, Env};
 handle_info(Info, Env) ->

@@ -21,7 +21,7 @@
 -define(EPMD_PORT_PLEASE2_REQ, $z).
 -define(EPMD_ALIVE2_RESP, $y).
 -define(EPMD_PORT2_RESP, $w).
--define(EPMD_NAMES, $n).
+-define(EPMD_NAMES_REQ, $n).
 
 %% Commands used only by interactive client
 -define(EPMD_DUMP, $d).
