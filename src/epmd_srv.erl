@@ -22,6 +22,8 @@
 -module(epmd_srv).
 -behaviour(gen_server).
 
+-define(maxsymlen, (255*4)).
+
 -record(env, {port,
               socket}).
 
@@ -50,7 +52,7 @@ handle_cast(accept, #env{socket=Listen}=Env) ->
 
 handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, Port:16, Type, Protocol, High:16, Low:16,
                        Len:16, Name:Len/binary, Elen:16, Extra:Elen/binary>>},
-            #env{socket=S}=Env) ->
+            #env{socket=S}=Env) when Elen =< ?maxsymlen ->
     error_logger:info_msg("EPMD Alive Request: ~p registered at ~w", [Name, Port]),
     case name_is_valid(Name) of
         true ->
@@ -62,10 +64,11 @@ handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, Port:16, Type, Protocol, High:16, Low:1
             end,
             {noreply, Env};
         false ->
+            error_logger:info_msg("EPMD Alive Request: Name invalid~n"),
             gen_tcp:close(S),
             {stop, normal, Env}
     end;
-handle_info({tcp, S, <<?EPMD_PORT_PLEASE2_REQ, Name/binary>>}, #env{socket=S}=Env) ->
+handle_info({tcp, S, <<?EPMD_PORT_PLEASE2_REQ, Name/binary>>}, #env{socket=S}=Env) when byte_size(Name) =< ?maxsymlen ->
     case epmd_reg:lookup(Name) of
 	{ok, Name, Port, Nodetype, Protocol, Highvsn, Lowvsn, Extra} ->
             error_logger:info_msg("EPMD Port Request: ~p -> ~w", [Name, Port]),
@@ -108,11 +111,16 @@ handle_info({tcp, S, <<?EPMD_KILL_REQ>>}, #env{socket=S}=Env) ->
     gen_tcp:close(S),
     erlang:halt(),
     {stop, normal,Env};
+handle_info({tcp, S, <<>>}, #env{socket=S}=Env) ->
+    error_logger:info_msg("EPMD Empty Request"),
+    gen_tcp:close(S),
+    {stop, normal, Env};
 handle_info({tcp_closed, S}, #env{socket=S}=Env) ->
     {stop, normal, Env};
-handle_info(Info, Env) ->
+handle_info(Info, #env{socket=S}=Env) ->
     error_logger:error_msg("Unhandled info ~p~n", [Info]),
-    {noreply, Env}.
+    gen_tcp:close(S),
+    {stop, normal, Env}.
 
 name_is_valid(Name) ->
     case [ C || <<C>> <= Name, C =:= 0 ] of
