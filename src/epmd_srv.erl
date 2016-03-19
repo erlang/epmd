@@ -25,6 +25,7 @@
 -define(maxsymlen, (255*4)).
 
 -record(env, {port,
+              relaxed = false,
               socket}).
 
 -export([start_link/1]).
@@ -34,13 +35,13 @@
 
 -include("erl_epmd.hrl").
 
-start_link([Socket,PortNo]) ->
-    gen_server:start_link(?MODULE, [Socket,PortNo], []).
+start_link([Socket,PortNo,Relaxed]) ->
+    gen_server:start_link(?MODULE, [Socket,PortNo,Relaxed], []).
 
-init([S,Port]) ->
+init([S,Port,Relaxed]) ->
     error_logger:info_msg("EPMD Service started~n"),
     gen_server:cast(self(), accept),
-    {ok, #env{socket=S,port=Port}}.
+    {ok, #env{socket=S,port=Port,relaxed=Relaxed}}.
 
 handle_call(_Req, _From, Env) ->
     {noreply, Env}.
@@ -106,7 +107,7 @@ handle_info({tcp, S, <<?EPMD_NAMES_REQ>>}, #env{port=ServerPort, socket=S}=Env) 
     reply(S, <<ServerPort:32, Nodes/binary>>),
     gen_tcp:close(S),
     {stop, normal,Env};
-handle_info({tcp, S, <<?EPMD_STOP_REQ, Name/binary>>}, #env{socket=S}=Env) ->
+handle_info({tcp, S, <<?EPMD_STOP_REQ, Name/binary>>}, #env{relaxed=true,socket=S}=Env) ->
     error_logger:info_msg("EPMD Stop Request: ~p", [safe_string(Name)]),
     %% Check if local peer
     %% Check if STOP_REQ is allowed
@@ -116,13 +117,29 @@ handle_info({tcp, S, <<?EPMD_STOP_REQ, Name/binary>>}, #env{socket=S}=Env) ->
     end,
     gen_tcp:close(S),
     {stop, normal,Env};
-handle_info({tcp, S, <<?EPMD_KILL_REQ>>}, #env{socket=S}=Env) ->
-    error_logger:info_msg("EPMD Kill Request"),
-    %% Check if local peer
-    %% Check if KILL_REQ is allowed
-    reply(S, <<"OK">>),
+handle_info({tcp, S, <<?EPMD_STOP_REQ, Name/binary>>}, #env{socket=S}=Env) ->
+    error_logger:info_msg("EPMD Stop Request: ~p (Disallowed)", [safe_string(Name)]),
     gen_tcp:close(S),
+    {stop, normal,Env};
+handle_info({tcp, S, <<?EPMD_KILL_REQ>>}, #env{relaxed=true,socket=S}=Env) ->
+    error_logger:info_msg("EPMD Kill Request - Allowed (Relaxed)"),
+    %% Check if local peer
+    reply(S, <<"OK">>),
     erlang:halt(),
+    gen_tcp:close(S),
+    {stop, normal, Env};
+handle_info({tcp, S, <<?EPMD_KILL_REQ>>}, #env{socket=S}=Env) ->
+    case epmd_reg:nodes() of
+        [] ->
+            error_logger:info_msg("EPMD Kill Request - Allowed"),
+            %% Check if local peer
+            reply(S, <<"OK">>),
+            erlang:halt();
+        _ ->
+            error_logger:info_msg("EPMD Kill Request - Disallowed (live nodes)"),
+            reply(S, <<"NO">>)
+    end,
+    gen_tcp:close(S),
     {stop, normal,Env};
 handle_info({tcp, S, <<>>}, #env{socket=S}=Env) ->
     error_logger:info_msg("EPMD Empty Request"),
