@@ -37,6 +37,7 @@
          init_per_testcase/2, end_per_testcase/2]).
 
 -export([register_name/1,
+         register_name_ipv6/1,
          register_names_1/1,
          register_names_2/1,
          register_duplicate_name/1,
@@ -107,7 +108,8 @@ suite() ->
     [{timetrap, {minutes, 3}}].
 
 all() -> 
-    [register_name, register_names_1, register_names_2,
+    [register_name, register_name_ipv6,
+     register_names_1, register_names_2,
      register_duplicate_name, unicode_name, long_unicode_name,
      get_port_nr, slow_get_port_nr,
      unregister_others_name_1, unregister_others_name_2,
@@ -201,15 +203,20 @@ long_unicode_name(Config) when is_list(Config) ->
     ok.
 
 % Internal function to register a node name, no close, i.e. unregister
+register_node6(Name) ->
+    register_node_v2({0,0,0,0,0,0,0,1},?DUMMY_PORT,$M,0,5,5,Name,"").
 
 register_node(Name) ->
-    register_node_v2(?DUMMY_PORT,$M,0,5,5,Name,"").
+    register_node_v2("localhost",?DUMMY_PORT,$M,0,5,5,Name,"").
+
 register_node(Name,Port) ->
     register_node_v2(Port,$M,0,5,5,Name,"").
 
 register_node_v2(Port, NodeType, Prot, HVsn, LVsn, Name, Extra) ->
+    register_node_v2("localhost", Port, NodeType, Prot, HVsn, LVsn, Name, Extra).
+register_node_v2(Addr, Port, NodeType, Prot, HVsn, LVsn, Name, Extra) ->
     Req = alive2_req(Port, NodeType, Prot, HVsn, LVsn, Name, Extra),
-    case send_req(Req) of
+    case send_req(Req, Addr) of
         {ok,Sock} ->
             case recv(Sock,4) of
                 {ok, [?EPMD_ALIVE2_RESP,_Res=0,_C0,_C1]} ->
@@ -222,8 +229,22 @@ register_node_v2(Port, NodeType, Prot, HVsn, LVsn, Name, Extra) ->
             error
     end.
 
-% Internal function to fetch information about a node
+%% Register a name over IPv6
+register_name_ipv6(Config) when is_list(Config) ->
+    % Test if the host has an IPv6 loopback address
+    Res = gen_tcp:listen(0, [inet6, {ip, {0,0,0,0,0,0,0,1}}]),
+    case Res of
+        {ok,LSock} ->
+            gen_tcp:close(LSock),
+            ok = epmdrun(),
+            {ok,Sock} = register_node6("foobar6"),
+            ok = close(Sock),        % Unregister
+            ok;
+        _Error ->
+            {skip, "Host does not have an IPv6 loopback address"}
+    end.
 
+% Internal function to fetch information about a node
 port_please_v2(Name) ->
     case send_req([?EPMD_PORT_PLEASE2_REQ,
                    binary_to_list(unicode:characters_to_binary(Name))]) of
@@ -933,8 +954,8 @@ flusher() ->
 connect() ->
     connect("localhost",?PORT, passive).
 
-%connect(Addr) ->
-%    connect(Addr,?PORT, passive).
+connect(Addr) ->
+    connect(Addr,?PORT, passive).
 
 connect_active() ->
     connect("localhost",?PORT, active).
@@ -1075,7 +1096,9 @@ send_direct(Sock, Bytes) ->
     end.
 
 send_req(Req) ->
-    case connect() of
+    send_req(Req, "localhost").
+send_req(Req,Addr) ->
+    case connect(Addr) of
         {ok,Sock} ->
             case send(Sock, [size16(Req), Req]) of
                 ok ->

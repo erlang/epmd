@@ -26,6 +26,7 @@
 -export([init/1]).
 
 -define(erlang_daemon_port, 4369).
+-define(CHILD(I,Type,Args), {I,{I,start_link,[Args]},temporary,3000,Type,[I]}).
 
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []),
@@ -38,23 +39,18 @@ init([]) ->
     PortNo = get_port_no(),
     Relaxed = application:get_env(epmd, relaxed_command_check, false),
     {ok, Listen} = gen_tcp:listen(PortNo, [{active, once},
-                                           binary,
-                                           {reuseaddr, true},
-                                           {packet, 2}]),
+                                            binary, inet6,
+                                            {reuseaddr, true},
+                                            {packet, 2}]),
     {ok, {{simple_one_for_one, 60, 3600},
-	  [{epmd_srv,
-	    {epmd_srv, start_link, [[Listen,PortNo,Relaxed]]},
-	    temporary, 3000, worker, [epmd_srv]}]}}.
+           [?CHILD(epmd_srv, worker, [Listen,PortNo,Relaxed])]}}.
     
 get_port_no() ->
     case os:getenv("ERL_EPMD_PORT") of
-	false ->
-	    application:get_env(epmd, port, ?erlang_daemon_port);
+	false -> application:get_env(epmd, port, ?erlang_daemon_port);
 	Port ->
 	    case (catch list_to_integer(Port)) of
-		N when is_integer(N) ->
-		    N;
-		_ ->
-		    application:get_env(epmd, port, ?erlang_daemon_port)
+		N when is_integer(N) -> N;
+		_ -> application:get_env(epmd, port, ?erlang_daemon_port)
 	    end
     end.
