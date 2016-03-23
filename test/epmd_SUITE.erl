@@ -683,7 +683,8 @@ returns_valid_populated_extra_with_nulls(Config) when is_list(Config) ->
 names_stdout(Config) when is_list(Config) ->
     ok = epmdrun(),
     {ok,Sock} = register_node("foobar"),
-    Data = os:cmd(?EPMD ++ " -names"),
+    Data = os:cmd(?EPMD ++ " " ++ epmd_port_arg() ++ " -names"),
+    io:format("NAMES: ~p~n", [Data]),
     {match,_} = re:run(Data, "^epmd: up and running", [multiline]),
     {match,_} = re:run(Data, "^name foobar at port", [multiline]),
     ok = close(Sock),
@@ -916,9 +917,12 @@ epmdrun(Epmd,Args0) ->
                O -> " " ++ O
            end,
     osrun(Epmd
-          ++ " " ?EPMDARGS " -port " ++ integer_to_list(?PORT)
+          ++ " " ?EPMDARGS
+          ++ " " ++ epmd_port_arg()
           ++ Args).
 
+epmd_port_arg() ->
+    "-port " ++ integer_to_list(?PORT).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Start an external process

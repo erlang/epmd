@@ -11,74 +11,120 @@
 -export([main/1]).
 
 -define(EPMD_DEFAULT_PORT, 4369).
+-include("erl_epmd.hrl").
 
 main(Args) ->
     try parse_args(Args) of
-        ok ->
-            ok = application:start(epmd),
-            receive after infinity -> ok end;
         error ->
-            usage()
+            usage();
+        {interactive, names} ->
+            get_names();
+        {interactive, normal} ->
+            ok = application:start(epmd),
+            receive after infinity -> ok end
     catch
         C:E ->
             io:format("badness ~w:~w~n~p~n", [C,E,erlang:get_stacktrace()])
     end,
     init:stop().
 
+parse_args(Args) ->
+    parse_args(Args, interactive, normal).
 %% parse interactive commands
-parse_args(["-names"|Args]) ->
-    parse_args(Args);
-parse_args(["-kill"|Args]) ->
-    parse_args(Args);
-parse_args(["-stop", _Name|Args]) ->
-    parse_args(Args);
-parse_args(["-systemd"|Args]) ->
-    parse_args(Args);
+parse_args(["-names"|Args], Type, _Cmd) ->
+    parse_args(Args, Type, names);
+parse_args(["-kill"|Args], Type, _Cmd) ->
+    parse_args(Args, Type, kill);
+parse_args(["-stop", _Name|Args], Type, _Cmd) ->
+    parse_args(Args, Type, stop);
+parse_args(["-systemd"|Args], Type, _Cmd) ->
+    parse_args(Args, Type, systemd);
 
 %% parse options
-parse_args(["-daemon"|Args]) ->
+parse_args(["-daemon"|Args], _Type, Cmd) ->
     application:set_env(epmd, daemon, true),
-    parse_args(Args);
-parse_args(["-relaxed_command_check"|Args]) ->
+    parse_args(Args, daemon, Cmd);
+parse_args(["-relaxed_command_check"|Args], Type, Cmd) ->
     application:set_env(epmd, relaxed_command_check, true),
-    parse_args(Args);
-parse_args(["-port",PortArg|Args]) ->
+    parse_args(Args, Type, Cmd);
+parse_args(["-port",PortArg|Args], Type, Cmd) ->
     Port = list_to_integer(PortArg),
     application:set_env(epmd, port, Port),
-    parse_args(Args);
-parse_args(["-address",AddrList|Args]) ->
+    parse_args(Args, Type, Cmd);
+parse_args(["-address",AddrList|Args], Type, Cmd) ->
     Ls = string:tokens(AddrList,","),
     F = fun(Str) ->
                 {ok,Addr} = inet_parse:address(Str),
                 Addr
         end,
-    _ = lists:map(F,Ls),
-    parse_args(Args);
+    Addrs = lists:map(F,Ls),
+    application:set_env(epmd, adddres, Addrs),
+    parse_args(Args, Type, Cmd);
 
 %% parse debug
-parse_args(["-d"|Args]) ->
+parse_args(["-d"|Args], Type, Cmd) ->
     application:set_env(epmd, debug, true),
-    parse_args(Args);
-parse_args(["-debug"|Args]) ->
+    parse_args(Args, Type, Cmd);
+parse_args(["-debug"|Args], Type, Cmd) ->
     application:set_env(epmd, debug, true),
-    parse_args(Args);
-parse_args(["-packet_timeout",T|Args]) ->
+    parse_args(Args, Type, Cmd);
+parse_args(["-packet_timeout",T|Args], Type, Cmd) ->
     Time = list_to_integer(T),
     application:set_env(epmd, packet_timeout, Time),
-    parse_args(Args);
-parse_args(["-delay_accept",T|Args]) ->
+    parse_args(Args, Type, Cmd);
+parse_args(["-delay_accept",T|Args], Type, Cmd) ->
     Time = list_to_integer(T),
     application:set_env(epmd, delay_accept, Time),
-    parse_args(Args);
-parse_args(["-delay_write",T|Args]) ->
+    parse_args(Args, Type, Cmd);
+parse_args(["-delay_write",T|Args], Type, Cmd) ->
     Time = list_to_integer(T),
     application:set_env(epmd, delay_write, Time),
-    parse_args(Args);
-parse_args([]) ->
-    ok;
-parse_args([A|_]) ->
+    parse_args(Args, Type, Cmd);
+parse_args([], Type, Cmd) ->
+    {Type, Cmd};
+parse_args([A|_], _, _) ->
     io:format("unrecognized argument: ~p~n", [A]),
     error.
+
+get_names() ->
+    Port = get_port(),
+    case request(get_address(), Port, <<?EPMD_NAMES_REQ>>) of
+        {ok, <<_:32,Names/binary>>} ->
+            io:format("epmd: up and running on port ~w with data:~n", [Port]),
+            io:format("~ts", [Names]),
+            ok;
+        error ->
+            io:format(standard_error, "epmd: Cannot connect to ~ts epmd~n", ["local"]),
+            ok
+    end.
+
+get_address() ->
+    Addr = "0.0.0.0",
+    Addr.
+
+get_port() ->
+    application:get_env(epmd, port, ?EPMD_DEFAULT_PORT).
+
+request(Addr, Port, Req) ->
+    request(Addr, Port, Req, 5000).
+
+request(Addr, Port, Req, Tmo) ->
+    %io:format(standard_error, "req ~p ~p ~p~n", [Addr, Port, Req]),
+    case gen_tcp:connect(Addr, Port, [binary,
+                                      {packet, 2},
+                                      {active, false}],
+                         Tmo) of
+        {ok, Fd} ->
+            %io:format(standard_error, "connected ..~n", []),
+            ok = gen_tcp:send(Fd, Req),
+            inet:setopts(Fd, [{packet, raw}]),
+            {ok, Res} = gen_tcp:recv(Fd, 0, Tmo),
+            ok = gen_tcp:close(Fd),
+            {ok, Res};
+        {error, econnrefused} ->
+            error
+    end.
+
 
 %% usage
 usage() ->
