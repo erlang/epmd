@@ -28,6 +28,7 @@
 -define(SHORT_PAUSE,   100).
 -define(MEDIUM_PAUSE, 300).
 -define(LONG_PAUSE,   500).
+-define(EPMD, "../../bin/epmd").
 
 % Information about nodes
 -record(node_info, {port, node_type, prot, lvsn, hvsn, node_name, extra}).
@@ -682,10 +683,7 @@ returns_valid_populated_extra_with_nulls(Config) when is_list(Config) ->
 names_stdout(Config) when is_list(Config) ->
     ok = epmdrun(),
     {ok,Sock} = register_node("foobar"),
-    ok = epmdrun("-names"),
-    {ok, Data} = receive {_Port, {data, D}} -> {ok, D}
-                 after 10000 -> {error, timeout}
-                 end,
+    Data = os:cmd(?EPMD ++ " -names"),
     {match,_} = re:run(Data, "^epmd: up and running", [multiline]),
     {match,_} = re:run(Data, "^name foobar at port", [multiline]),
     ok = close(Sock),
@@ -910,10 +908,9 @@ ssh_proxy(SSHHost,ProxyPort) ->
 epmdrun() ->
     epmdrun([]).
 epmdrun(Args) ->
-    epmdrun("../../bin/epmd", Args).
+    epmdrun(?EPMD, Args).
 
 epmdrun(Epmd,Args0) ->
-    io:format("epmdrun() => Epmd = ~p",[Epmd]),
     Args = case Args0 of
                [] -> [];
                O -> " " ++ O
@@ -927,6 +924,7 @@ epmdrun(Epmd,Args0) ->
 % Start an external process
 
 osrun(Cmd) ->
+    io:format("osrun(~p)~n",[Cmd]),
     spawn_link(fun() -> flusher(Cmd) end),
     ok.
 
