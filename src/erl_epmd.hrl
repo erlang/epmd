@@ -17,6 +17,8 @@
 %% %CopyrightEnd%
 %%
 
+-define(EPMD_DEFAULT_PORT, 4369).
+
 -define(EPMD_ALIVE2_REQ, $x).
 -define(EPMD_PORT_PLEASE2_REQ, $z).
 -define(EPMD_ALIVE2_RESP, $y).

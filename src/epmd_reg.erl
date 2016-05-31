@@ -126,4 +126,3 @@ code_change(_OldVsn, State, _Extra) ->
 time_seconds() ->
     {_, Sec, _} = os:timestamp(),
     Sec.
-

@@ -21,11 +21,11 @@
 
 -module(epmd_listen_sup).
 -behaviour(supervisor).
+-include("erl_epmd.hrl").
 
 -export([start_link/0, start_listener/0]).
 -export([init/1]).
 
--define(erlang_daemon_port, 4369).
 -define(CHILD(I,Type,Args), {I,{I,start_link,[Args]},temporary,3000,Type,[I]}).
 
 start_link() ->
@@ -47,10 +47,10 @@ init([]) ->
     
 get_port_no() ->
     case os:getenv("ERL_EPMD_PORT") of
-	false -> application:get_env(epmd, port, ?erlang_daemon_port);
+	false -> application:get_env(epmd, port, ?EPMD_DEFAULT_PORT);
 	Port ->
 	    case (catch list_to_integer(Port)) of
 		N when is_integer(N) -> N;
-		_ -> application:get_env(epmd, port, ?erlang_daemon_port)
+		_ -> application:get_env(epmd, port, ?EPMD_DEFAULT_PORT)
 	    end
     end.

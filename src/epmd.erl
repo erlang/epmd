@@ -26,7 +26,6 @@
 
 -export([main/1]).
 
--define(EPMD_DEFAULT_PORT, 4369).
 -include("erl_epmd.hrl").
 
 main(Args) ->
@@ -125,13 +124,11 @@ request(Addr, Port, Req) ->
     request(Addr, Port, Req, 5000).
 
 request(Addr, Port, Req, Tmo) ->
-    %io:format(standard_error, "req ~p ~p ~p~n", [Addr, Port, Req]),
     case gen_tcp:connect(Addr, Port, [binary,
                                       {packet, 2},
                                       {active, false}],
                          Tmo) of
         {ok, Fd} ->
-            %io:format(standard_error, "connected ..~n", []),
             ok = gen_tcp:send(Fd, Req),
             inet:setopts(Fd, [{packet, raw}]),
             {ok, Res} = gen_tcp:recv(Fd, 0, Tmo),
@@ -198,4 +195,3 @@ usage_string() ->
      "    -systemd\n",
      "        Wait for socket from systemd. The option makes sense\n",
      "        when started from .socket unit.\n"].
-
