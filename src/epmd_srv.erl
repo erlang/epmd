@@ -56,8 +56,8 @@ handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, Port:16, Type, Protocol, High:16, Low:1
             #env{socket=S}=Env) ->
     error_logger:info_msg("EPMD Alive Request: ~p registered at ~w~n", [safe_string(Name), Port]),
     error_logger:info_msg("EPMD Alive Request: name size ~w~n", [byte_size(Name)]),
-    case name_is_valid(Name) of
-        ok ->
+    case {name_is_valid(Name),extra_is_valid(Extra)} of
+        {ok,ok} ->
             case epmd_reg:node_reg(Name, Port, Type, Protocol, High, Low, Extra) of
                 {ok, Creation} ->
                     reply(S, <<?EPMD_ALIVE2_RESP, 0, Creation:16>>);
@@ -65,15 +65,16 @@ handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, Port:16, Type, Protocol, High:16, Low:1
                     reply(S, <<?EPMD_ALIVE2_RESP, 1, 99:16>>)
             end,
             {noreply, Env};
-        invalid_size ->
+        {invalid_string,_} ->
+            error_logger:info_msg("EPMD Alive Request: Invalid name (nulls)~n"),
+            gen_tcp:close(S),
+            {stop, normal, Env};
+        {NameValid,ExtraValid} when NameValid =:= invalid_size orelse
+                                    ExtraValid =:= invalid ->
             %% really? .. this the way?
             error_logger:info_msg("EPMD Alive Request: Invalid size (too large)~n"),
             reply(S, <<?EPMD_ALIVE2_RESP, 1, 99:16>>),
-            {noreply, Env};
-        invalid_string ->
-            error_logger:info_msg("EPMD Alive Request: Invalid name (nulls)~n"),
-            gen_tcp:close(S),
-            {stop, normal, Env}
+            {noreply, Env}
     end;
 handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, _/binary>>}, #env{socket=S}=Env) ->
     %% why do we handle too large and too small differently?
@@ -182,3 +183,8 @@ name_is_valid(_, N) when N > 255 -> invalid_size;
 name_is_valid([], _) -> ok;
 name_is_valid([0|_], _) -> invalid_string;
 name_is_valid([_|Ls], N) -> name_is_valid(Ls, N + 1).
+
+extra_is_valid(Extra) when byte_size(Extra) > ?maxsymlen ->
+    invalid;
+extra_is_valid(_) ->
+    ok.
