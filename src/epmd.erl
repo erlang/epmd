@@ -26,7 +26,7 @@
 
 -export([main/1]).
 
--include("erl_epmd.hrl").
+-include("epmd.hrl").
 
 main(Args) ->
     try parse_args(Args) of

@@ -21,7 +21,7 @@
 
 -module(epmd_listen_sup).
 -behaviour(supervisor).
--include("erl_epmd.hrl").
+-include("epmd.hrl").
 
 -export([start_link/0, start_listener/0]).
 -export([init/1]).
