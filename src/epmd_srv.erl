@@ -24,9 +24,9 @@
 
 -define(maxsymlen, (255*4)).
 
--record(env, {port,
-              relaxed = false,
-              socket}).
+-record(env, {port :: non_neg_integer(),
+              relaxed = false :: boolean(),
+              socket :: gen_tcp:socket()}).
 
 -export([start_link/1]).
 -export([init/1, terminate/2,

@@ -26,31 +26,68 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, 
 	 code_change/3, terminate/2]).
 
--record(state, {reg, unreg, unreg_count}).
+-type creation() :: 1..3.
+-type name() :: binary().
 
--record(node, {symname, port, nodetype, protocol, highvsn, lowvsn, extra,
-	       creation, monref}).
+-record(node, {symname  :: name(),
+               port     :: inet:port_number(),
+               nodetype :: byte(), %% specify
+               protocol :: byte(), %% specify
+               highvsn  :: 0..65535,
+               lowvsn   :: 0..65535,
+               extra    :: binary(),
+               creation :: creation(),
+               monref   :: reference()}).
+
+-record(state, {reg = []        :: [#node{}],
+                unreg = []      :: [#node{}],
+                unreg_count = 0 :: non_neg_integer()}).
 
 -define(max_unreg_count, 1000).
 
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
+-spec node_reg(Name, Port, Nodetype, Protocol, Highvsn, Lowvsn, Extra) ->
+          {'ok', creation()} | {'error','name_occupied'} when
+      Name :: name(),
+      Port :: inet:port_number(),
+      Nodetype :: byte(),
+      Protocol :: byte(),
+      Highvsn :: 0..65535,
+      Lowvsn :: 0..65535,
+      Extra :: binary().
+
 node_reg(Name, Port, Nodetype, Protocol, Highvsn, Lowvsn, Extra) ->
     gen_server:call(?MODULE, {node_reg, Name, Port, Nodetype, 
 			      Protocol, Highvsn, Lowvsn, Extra, self()}).
 
+-spec node_unreg(Name :: name()) -> 'ok' | 'error'.
+
 node_unreg(Name) ->
     gen_server:call(?MODULE, {node_unreg, Name}).
 
+-spec lookup(Name :: binary()) -> Result when
+      Result :: {'ok', Name, Port, Nodetype, Protocol, Highvsn, Lowvsn, Extra}
+              | {'error','not_found'},
+      Name :: binary(),
+      Port :: inet:port_number(),
+      Nodetype :: byte(),
+      Protocol :: byte(),
+      Highvsn :: 0..65535,
+      Lowvsn :: 0..65535,
+      Extra :: binary().
+
 lookup(Name) ->
     gen_server:call(?MODULE, {lookup, Name}).
+
+-spec nodes() -> [{name(),inet:port_number()}].
 
 nodes() ->
     gen_server:call(?MODULE, nodes).
 
 init([]) ->
-    {ok, #state{reg=[], unreg=[], unreg_count=0}}.
+    {ok, #state{}}.
 
 handle_call({node_reg, Name, Port, Nodetype, Protocol, Highvsn, Lowvsn, 
 	     Extra, Srv_pid}, _From, 

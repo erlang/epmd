@@ -36,10 +36,11 @@ distclean: clean
 docs:
 	@$(REBAR3) edoc
 
-
 test: 
 	@$(REBAR3) do ct, cover
 
+dialyzer: build
+	@$(REBAR3) dialyzer
 
 release: test
 	@$(REBAR3) release
