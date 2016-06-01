@@ -37,13 +37,16 @@ start_listener() ->
 
 init([]) ->
     PortNo = get_port_no(),
-    Relaxed = application:get_env(epmd, relaxed_command_check, false),
     {ok, Listen} = gen_tcp:listen(PortNo, [{active, once},
                                             binary, inet6,
                                             {reuseaddr, true},
                                             {packet, 2}]),
     {ok, {{simple_one_for_one, 60, 3600},
-           [?CHILD(epmd_srv, worker, [Listen,PortNo,Relaxed])]}}.
+           [?CHILD(epmd_srv, worker,
+                   [Listen,PortNo,
+                    %% debug options
+                    application:get_env(epmd, relaxed_command_check, false),
+                    application:get_env(epmd, delay_write, 0)])]}}.
     
 get_port_no() ->
     case os:getenv("ERL_EPMD_PORT") of

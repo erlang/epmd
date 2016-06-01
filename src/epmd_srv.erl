@@ -24,9 +24,11 @@
 
 -define(maxsymlen, (255*4)).
 
--record(env, {port :: non_neg_integer(),
+-record(env, {socket :: gen_tcp:socket(),
+              port :: non_neg_integer(),
+              %% debug settings
               relaxed = false :: boolean(),
-              socket :: gen_tcp:socket()}).
+              delay_write = 0 :: non_neg_integer()}).
 
 -export([start_link/1]).
 -export([init/1, terminate/2,
@@ -35,13 +37,15 @@
 
 -include("epmd.hrl").
 
-start_link([Socket,PortNo,Relaxed]) ->
-    gen_server:start_link(?MODULE, [Socket,PortNo,Relaxed], []).
+start_link([Socket,PortNo,Relaxed,DelayWrite]) ->
+    gen_server:start_link(?MODULE, [Socket,PortNo,Relaxed,DelayWrite], []).
 
-init([S,Port,Relaxed]) ->
+init([S,Port,Relaxed,DelayWrite]) ->
     error_logger:info_msg("EPMD Service started~n"),
     gen_server:cast(self(), accept),
-    {ok, #env{socket=S,port=Port,relaxed=Relaxed}}.
+    {ok, #env{socket=S,port=Port,
+              relaxed=Relaxed,
+              delay_write=DelayWrite}}.
 
 handle_call(_Req, _From, Env) ->
     {noreply, Env}.
@@ -60,9 +64,9 @@ handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, Port:16, Type, Protocol, High:16, Low:1
         {ok,ok} ->
             case epmd_reg:node_reg(Name, Port, Type, Protocol, High, Low, Extra) of
                 {ok, Creation} ->
-                    reply(S, <<?EPMD_ALIVE2_RESP, 0, Creation:16>>);
+                    reply(S, <<?EPMD_ALIVE2_RESP, 0, Creation:16>>, Env);
                 {error, _} ->
-                    reply(S, <<?EPMD_ALIVE2_RESP, 1, 99:16>>)
+                    reply(S, <<?EPMD_ALIVE2_RESP, 1, 99:16>>, Env)
             end,
             {noreply, Env};
         {invalid_string,_} ->
@@ -73,7 +77,7 @@ handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, Port:16, Type, Protocol, High:16, Low:1
                                     ExtraValid =:= invalid ->
             %% really? .. this the way?
             error_logger:info_msg("EPMD Alive Request: Invalid size (too large)~n"),
-            reply(S, <<?EPMD_ALIVE2_RESP, 1, 99:16>>),
+            reply(S, <<?EPMD_ALIVE2_RESP, 1, 99:16>>, Env),
             {noreply, Env}
     end;
 handle_info({tcp, S, <<?EPMD_ALIVE2_REQ, _/binary>>}, #env{socket=S}=Env) ->
@@ -89,10 +93,10 @@ handle_info({tcp, S, <<?EPMD_PORT_PLEASE2_REQ, Name/binary>>}, #env{socket=S}=En
 	    Elen = byte_size(Extra),
             reply(S, <<?EPMD_PORT2_RESP, 0, Port:16, Nodetype,
                        Protocol, Highvsn:16, Lowvsn:16,
-                       Len:16, Name/binary, Elen:16, Extra/binary>>);
+                       Len:16, Name/binary, Elen:16, Extra/binary>>, Env);
 	{error, _} ->
             error_logger:info_msg("EPMD Port Request: ~p -> Not registered", [safe_string(Name)]),
-	    reply(S, <<?EPMD_PORT2_RESP, 1>>)
+	    reply(S, <<?EPMD_PORT2_RESP, 1>>, Env)
     end,
     gen_tcp:close(S),
     {stop, normal, Env};
@@ -105,7 +109,7 @@ handle_info({tcp, S, <<?EPMD_NAMES_REQ>>}, #env{port=ServerPort, socket=S}=Env) 
     Format = "name ~s at port ~w~n",
     Nodes = iolist_to_binary([io_lib:format(Format, [Name, Port]) ||
                               {Name, Port} <- epmd_reg:nodes()]),
-    reply(S, <<ServerPort:32, Nodes/binary>>),
+    reply(S, <<ServerPort:32, Nodes/binary>>, Env),
     gen_tcp:close(S),
     {stop, normal,Env};
 handle_info({tcp, S, <<?EPMD_STOP_REQ, Name/binary>>}, #env{relaxed=true,socket=S}=Env) ->
@@ -113,8 +117,8 @@ handle_info({tcp, S, <<?EPMD_STOP_REQ, Name/binary>>}, #env{relaxed=true,socket=
     %% Check if local peer
     %% Check if STOP_REQ is allowed
     case epmd_reg:node_unreg(Name) of
-        ok    -> reply(S, <<"STOPPED">>);
-        error -> reply(S, <<"NOEXIST">>)
+        ok    -> reply(S, <<"STOPPED">>, Env);
+        error -> reply(S, <<"NOEXIST">>, Env)
     end,
     gen_tcp:close(S),
     {stop, normal,Env};
@@ -125,7 +129,7 @@ handle_info({tcp, S, <<?EPMD_STOP_REQ, Name/binary>>}, #env{socket=S}=Env) ->
 handle_info({tcp, S, <<?EPMD_KILL_REQ>>}, #env{relaxed=true,socket=S}=Env) ->
     error_logger:info_msg("EPMD Kill Request - Allowed (Relaxed)"),
     %% Check if local peer
-    reply(S, <<"OK">>),
+    reply(S, <<"OK">>, Env),
     erlang:halt(),
     gen_tcp:close(S),
     {stop, normal, Env};
@@ -134,11 +138,11 @@ handle_info({tcp, S, <<?EPMD_KILL_REQ>>}, #env{socket=S}=Env) ->
         [] ->
             error_logger:info_msg("EPMD Kill Request - Allowed"),
             %% Check if local peer
-            reply(S, <<"OK">>),
+            reply(S, <<"OK">>, Env),
             erlang:halt();
         _ ->
             error_logger:info_msg("EPMD Kill Request - Disallowed (live nodes)"),
-            reply(S, <<"NO">>)
+            reply(S, <<"NO">>, Env)
     end,
     gen_tcp:close(S),
     {stop, normal,Env};
@@ -158,7 +162,8 @@ terminate(_Reason, _Env) ->
 code_change(_OldVsn, Env, _Extra) ->
     {ok, Env}.
 
-reply(S, Data) ->
+reply(S, Data, #env{delay_write=Delay}) ->
+    sleep_seconds(Delay), %% debug
     %% we need {packet, 2} on receive but raw on send
     inet:setopts(S, [{packet, raw}]),
     gen_tcp:send(S, Data),
@@ -188,3 +193,8 @@ extra_is_valid(Extra) when byte_size(Extra) > ?maxsymlen ->
     invalid;
 extra_is_valid(_) ->
     ok.
+
+sleep_seconds(0) ->
+    ok;
+sleep_seconds(Time) ->
+    timer:sleep(Time*1000).
