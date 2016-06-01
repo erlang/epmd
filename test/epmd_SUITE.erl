@@ -840,38 +840,37 @@ no_live_killing(Config) when is_list(Config) ->
 %% Check for regression - don't make zombie from node which
 %% sends TCP RST at wrong time
 socket_reset_before_alive2_reply_is_written(Config) when is_list(Config) ->
-    {skip, "Weird testcase"}.
-    %%%% - delay_write for easier triggering of race condition
-    %%%% - relaxed_command_check for gracefull shutdown of epmd even if there
-    %%%%   is stuck node.
-    %%ok = epmdrun("-delay_write 1 -relaxed_command_check"),
+    %% - delay_write for easier triggering of race condition
+    %% - relaxed_command_check for gracefull shutdown of epmd even if there
+    %%   is stuck node.
+    ok = epmdrun("-delay_write 1 -relaxed_command_check"),
 
-    %%%% We can't use send_req/1 directly as we want to do inet:setopts/2
-    %%%% on our socket.
-    %%{ok, Sock} = connect(),
+    %% We can't use send_req/1 directly as we want to do inet:setopts/2
+    %% on our socket.
+    {ok, Sock} = connect(),
 
-    %%%% Issuing close/1 on such socket will result in immediate RST packet.
-    %%ok = inet:setopts(Sock, [{linger, {true, 0}}]),
+    %% Issuing close/1 on such socket will result in immediate RST packet.
+    ok = inet:setopts(Sock, [{linger, {true, 0}}]),
 
-    %%Req = alive2_req(4711, 77, 0, 5, 5, "test", []),
-    %%ok = send(Sock, [size16(Req), Req]),
+    Req = alive2_req(4711, 77, 0, 5, 5, "test", []),
+    ok = send(Sock, [size16(Req), Req]),
 
-    %%timer:sleep(500), %% Wait for the first 1/2 of delay_write before closing
-    %%ok = close(Sock),
+    timer:sleep(500), %% Wait for the first 1/2 of delay_write before closing
+    ok = close(Sock),
 
-    %%timer:sleep(500 + ?SHORT_PAUSE), %% Wait for the other 1/2 of delay_write
+    timer:sleep(500 + ?SHORT_PAUSE), %% Wait for the other 1/2 of delay_write
 
-    %%%% Wait another delay_write interval, due to delay doubling in epmd.
-    %%%% Should be removed when this is issue is fixed there.
-    %%timer:sleep(5000),
+    %% Wait another delay_write interval, due to delay doubling in epmd.
+    %% Should be removed when this is issue is fixed there.
+    timer:sleep(5000),
 
-    %%{ok, SockForNames} = connect_active(),
-    %%io:format("sockfornames ~p~n", [SockForNames]),
+    {ok, SockForNames} = connect_active(),
+    io:format("sockfornames ~p~n", [SockForNames]),
 
-    %%%% And there should be no stuck nodes
-    %%{ok, []} = do_get_names(SockForNames),
-    %%ok = close(SockForNames),
-    %%ok.
+    %% And there should be no stuck nodes
+    {ok, []} = do_get_names(SockForNames),
+    ok = close(SockForNames),
+    ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Terminate all tests with killing epmd.
