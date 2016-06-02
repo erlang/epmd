@@ -40,6 +40,8 @@ The application respects the following optional OS environment variables:
 * `$ERL_EPMD_PORT` - Expects an integer. Same behavior as `port` above.
 * `$ERL_EPMD_RELAXED_COMMAND_CHECK` - Treated as `true` if set otherwise `false`. Same behavior as `relaxed_command_check`.
 
+_Note: `$EPMD_ADDRESS` and `address` is not yet implemented._
+
 ### EPMD Escript
 
     usage: epmd [-d|-debug] [DbgExtra...] [-address List]
@@ -85,3 +87,6 @@ The application respects the following optional OS environment variables:
             Forcibly unregisters a name with epmd
             (only allowed if -relaxed_command_check was given when
             epmd was started).
+
+
+_Note: `-address`, `-debug` and `-daemon` is not yet implemented._
