@@ -32,6 +32,7 @@ start_link(Args) ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, Args).
 
 init(_Args) ->
+    error_logger:info_msg("epmd - service started~n"),
     %% Hint:
     %% Child_spec = {Name, {M, F, A},
     %%               Restart, Shutdown_time, Type, Modules_used}

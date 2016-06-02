@@ -129,6 +129,10 @@ handle_call(nodes, _From, #state{reg=Reg}=State) ->
 handle_call({node_unreg, Name}, _From, #state{reg=Reg,unreg=Unreg,unreg_count=Uc}=S) ->
     case lists:keytake(Name, #node.symname, Reg) of
         {value, Node, New_reg} ->
+            error_logger:info_msg("epmd: unregistering '~ts:~w' on port ~w~n",
+                                  [safe_string(Node#node.symname),
+                                   Node#node.creation,
+                                   Node#node.port]),
             S1 = S#state{reg=New_reg, unreg=[Node|Unreg], unreg_count=Uc+1},
             {reply, ok, S1};
         _ ->
@@ -142,12 +146,20 @@ handle_info({'DOWN', Mref, _, _, _},
 	    #state{reg=Reg, unreg=Unreg, unreg_count=Uc}=State) 
   when Uc < 2*?max_unreg_count ->
     {value, Node, New_reg} = lists:keytake(Mref, #node.monref, Reg),
+    error_logger:info_msg("epmd: unregistering '~ts:~w' on port ~w~n",
+                          [safe_string(Node#node.symname),
+                           Node#node.creation,
+                           Node#node.port]),
     {noreply, State#state{reg=New_reg, unreg=[Node|Unreg], 
 			  unreg_count=Uc+1}};
 handle_info({'DOWN', Mref, _, _, _}, 
 	    #state{reg=Reg, unreg=Unreg, unreg_count=Uc}=State) 
   when Uc =:= 2*?max_unreg_count ->
     {value, Node, New_reg} = lists:keytake(Mref, #node.monref, Reg),
+    error_logger:info_msg("epmd: unregistering '~ts:~w' on port ~w~n",
+                          [safe_string(Node#node.symname),
+                           Node#node.creation,
+                           Node#node.port]),
     {Ur, _} = lists:split(?max_unreg_count, Unreg),
     {noreply, State#state{reg=New_reg, unreg=[Node|Ur], 
 			  unreg_count=?max_unreg_count+1}};
@@ -163,3 +175,8 @@ code_change(_OldVsn, State, _Extra) ->
 time_seconds() ->
     {_, Sec, _} = os:timestamp(),
     Sec.
+
+safe_string(<<Name:255/binary, _/binary>>) ->
+    <<Name/binary,"..">>;
+safe_string(Name) ->
+    Name.
