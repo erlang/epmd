@@ -79,9 +79,10 @@
 
 % Port we use for testing
 -define(PORT,2243).
--define(EPMDARGS,"-packet_timeout 1").
+-define(EPMDARGS,"").
+%-define(EPMDARGS,"-packet_timeout 1"). %% packet timeout is not implemented
 
--define(DUMMY_PORT, 1000).			% Port number to register
+-define(DUMMY_PORT, 1000).      % Port number to register
 % not in real use.
 
 % Timeouts etc inside test cases. Time is in milliseconds.

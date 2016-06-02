@@ -52,8 +52,6 @@ parse_args(["-kill"|Args], Type, _Cmd) ->
     parse_args(Args, Type, kill);
 parse_args(["-stop", _Name|Args], Type, _Cmd) ->
     parse_args(Args, Type, stop);
-parse_args(["-systemd"|Args], Type, _Cmd) ->
-    parse_args(Args, Type, systemd);
 
 %% parse options
 parse_args(["-daemon"|Args], _Type, Cmd) ->
@@ -73,7 +71,7 @@ parse_args(["-address",AddrList|Args], Type, Cmd) ->
                 Addr
         end,
     Addrs = lists:map(F,Ls),
-    application:set_env(epmd, adddres, Addrs),
+    application:set_env(epmd, address, Addrs),
     parse_args(Args, Type, Cmd);
 
 %% parse debug
@@ -82,14 +80,6 @@ parse_args(["-d"|Args], Type, Cmd) ->
     parse_args(Args, Type, Cmd);
 parse_args(["-debug"|Args], Type, Cmd) ->
     application:set_env(epmd, debug, true),
-    parse_args(Args, Type, Cmd);
-parse_args(["-packet_timeout",T|Args], Type, Cmd) ->
-    Time = list_to_integer(T),
-    application:set_env(epmd, packet_timeout, Time),
-    parse_args(Args, Type, Cmd);
-parse_args(["-delay_accept",T|Args], Type, Cmd) ->
-    Time = list_to_integer(T),
-    application:set_env(epmd, delay_accept, Time),
     parse_args(Args, Type, Cmd);
 parse_args(["-delay_write",T|Args], Type, Cmd) ->
     Time = list_to_integer(T),
@@ -169,15 +159,6 @@ usage_string() ->
      "        epmd -kill even if there are registered nodes.\n",
      "        Also allows forced unregister (epmd -stop).\n",
      "\nDbgExtra options\n",
-     "    -packet_timeout Seconds\n",
-     "        Set the number of seconds a connection can be\n",
-     "        inactive before epmd times out and closes the\n",
-     "        connection (default 60).\n\n",
-     "    -delay_accept Seconds\n",
-     "        To simulate a busy server you can insert a\n",
-     "        delay between epmd gets notified about that\n",
-     "        a new connection is requested and when the\n",
-     "        connections gets accepted.\n\n",
      "    -delay_write Seconds\n",
      "        Also a simulation of a busy server. Inserts\n",
      "        a delay before a reply is sent.\n",
@@ -191,7 +172,4 @@ usage_string() ->
      "    -stop Name\n",
      "        Forcibly unregisters a name with epmd\n",
      "        (only allowed if -relaxed_command_check was given when \n",
-     "        epmd was started).\n",
-     "    -systemd\n",
-     "        Wait for socket from systemd. The option makes sense\n",
-     "        when started from .socket unit.\n"].
+     "        epmd was started).\n"].
