@@ -1,4 +1,5 @@
 _build/
+epmd
 doc/
 *.swp
 rebar.lock
