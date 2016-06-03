@@ -1,6 +1,6 @@
 Erlang Port Mapper Daemon
 =========================
-[![Build Status](https://travis-ci.org/psyeugenic/epmd.svg?branch=master)](https://travis-ci.org/psyeugenic/epmd)
+[![Build Status](https://travis-ci.org/erlang/epmd.svg?branch=master)](https://travis-ci.org/erlang/epmd)
 
 An Erlang implmentation of Erlang/OTPs port mapper daemon.
 
@@ -40,7 +40,7 @@ The application respects the following optional OS environment variables:
 * `$ERL_EPMD_PORT` - Expects an integer. Same behavior as `port` above.
 * `$ERL_EPMD_RELAXED_COMMAND_CHECK` - Treated as `true` if set otherwise `false`. Same behavior as `relaxed_command_check`.
 
-_Note: `$EPMD_ADDRESS` and `address` is not yet implemented._
+_Note: `$ERL_EPMD_ADDRESS` and `address` is not yet implemented._
 
 ### EPMD Escript
 
