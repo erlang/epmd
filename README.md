@@ -2,7 +2,7 @@ Erlang Port Mapper Daemon
 =========================
 [![Build Status](https://travis-ci.org/erlang/epmd.svg?branch=master)](https://travis-ci.org/erlang/epmd)
 
-An Erlang implmentation of Erlang/OTPs port mapper daemon.
+An Erlang implementation of Erlang/OTPs port mapper daemon.
 
 The Erlang code was originally written by Peer Stritzinger (@peerst) which was
 a direct port of Erlang/OTPs C-implementation of EPMD.
