@@ -121,13 +121,22 @@ request(Addr, Port, Req, Tmo) ->
         {ok, Fd} ->
             ok = gen_tcp:send(Fd, Req),
             inet:setopts(Fd, [{packet, raw}]),
-            {ok, Res} = gen_tcp:recv(Fd, 0, Tmo),
+            {ok, Res} = recv_acc(Fd, <<>>, Tmo),
             ok = gen_tcp:close(Fd),
             {ok, Res};
         {error, econnrefused} ->
             error
     end.
 
+recv_acc(Socket, Chunks, Timeout) ->
+    X = gen_tcp:recv(Socket, 0, Timeout),
+    recv(X, {Socket, Chunks, Timeout}).
+
+recv({error, closed}, {_, Chunks, _}) -> {ok, Chunks};
+recv({error, Other}, _) -> Other;
+recv({ok, Chunk}, {Socket, Chunks, Timeout}) ->
+    X = <<Chunks/binary, Chunk/binary>>,
+    recv_acc(Socket, X, Timeout).
 
 %% usage
 usage() ->
